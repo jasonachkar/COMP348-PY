@@ -50,7 +50,7 @@ def calculate_global_statistics(data):
     max_lon = data['max_lon']
     step = data['step']
     
-    
+    #Getting the number of latitude and longitude points we have. We then multiply them to get the number of all points.
     lat_points = round((max_lat - min_lat) / step) + 1
     lon_points = round((max_lon - min_lon) / step) + 1
     total_possible_points = lat_points * lon_points
@@ -87,8 +87,15 @@ def calculate_base_station_statistics(data, station_id=None):
     #If the user does not specify an ID. We choose a random base station
     if station_id is None:
         station_id = random.choice([bs['id'] for bs in data['baseStations']])
+    try:
+        base_station = next(bs for bs in data['baseStations'] if bs['id'] == station_id) ##Search all basestations and return the basestation that has the same id as the user input.
+    except: 
+        print("Invalid ID! Please try again!")
+        return
     
-    base_station = next(bs for bs in data['baseStations'] if bs['id'] == station_id)
+    if(base_station == None):
+        print("Invalid ID! Please try again!")
+        return
     antennas = base_station['ants']
     num_antennas = len(antennas)
     
@@ -101,7 +108,7 @@ def calculate_base_station_statistics(data, station_id=None):
         points = set(tuple(pt)[:2] for pt in ant['pts'])
         all_points.update(points)
         for point in points:
-            if point in points_covered_once:
+            if point in points_covered_once: #If the point covered is already in the points_covered_once set then this points has been covered multiple times so we move it to points_covered_multiple set.
                 points_covered_multiple.add(point)
                 points_covered_once.remove(point)
             elif point not in points_covered_multiple:
@@ -114,7 +121,7 @@ def calculate_base_station_statistics(data, station_id=None):
     min_lon = data['min_lon']
     max_lon = data['max_lon']
     step = data['step']
-    
+    #Getting the total number of latitude and longitued points then multiplying one another to get total number of points
     lat_points = round((max_lat - min_lat) / step) + 1
     lon_points = round((max_lon - min_lon) / step) + 1
     total_possible_points = lat_points * lon_points
@@ -125,13 +132,17 @@ def calculate_base_station_statistics(data, station_id=None):
     num_points_covered_multiple = len(points_covered_multiple)
     num_points_not_covered = len(all_points) - num_points_covered_once - num_points_covered_multiple
     
+    #Loop through the antennas to find the max/average number of antennas covering one point
     max_antennas_covering_point = max(len([ant for ant in antennas if point in set(tuple(pt)[:2] for pt in ant['pts'])]) for point in all_points)
     avg_antennas_covering_point = sum(len([ant for ant in antennas if point in set(tuple(pt)[:2] for pt in ant['pts'])]) for point in all_points) / len(all_points)
     
+    #Calculate the percentage of points covered by the antennas
     coverage_percentage = (num_points_covered_once + num_points_covered_multiple) / total_possible_points * 100
     
+    #Get the ID of the antenna covering the maximum amount of points
     antenna_covering_max_points = max(antennas, key=lambda ant: len(ant['pts']))
     
+    #Print results
     print(f"Base station {station_id} statistics:")
     print(f"Total number of antennas = {num_antennas}")
     print(f"Total number of points covered by exactly one antenna = {num_points_covered_once}")
@@ -161,41 +172,57 @@ def check_coverage(data, lat, lon):
                 points_with_antenna_info[point].append((bs['id'], ant['id'], pt[2]))
     
     point = (lat, lon)
+    #Check if coordinates provided are covered by an antenna
     if point in points_with_antenna_info:
         print(f"The point ({lat}, {lon}) is covered by the following antennas:")
         for info in points_with_antenna_info[point]:
             print(f"Base station {info[0]}, Antenna {info[1]}, Received power {info[2]}")
     else:
-        nearest_point = min(all_points, key=lambda p: (p[0] - lat)**2 + (p[1] - lon)**2)
-        nearest_info = points_with_antenna_info[nearest_point][0]
+        #If not, get the nearest point to the coordinates provided by the user
+        nearest_point = min(all_points, key=lambda p: (p[0] - lat)**2 + (p[1] - lon)**2) #Compare between the coordinates entered and antennas, the minimum is the closest.
+        nearest_info = points_with_antenna_info[nearest_point][0] #Get the nearest point information
         print(f"The point ({lat}, {lon}) is not explicitly covered. Nearest antenna information:")
         print(f"Base station {nearest_info[0]}, Antenna {nearest_info[1]}, Received power {nearest_info[2]}")
 
 def main():
+    #Parse through the arguments passed in the command line to get the path of our json file
     parser = argparse.ArgumentParser(description="Cellular Network Coverage")
     parser.add_argument('file', type=str, help='JSON file with coverage data')
     args = parser.parse_args()
-
-    data = read_json(args.file)
+    try:
+        data = read_json(args.file)
+    except:
+        print("Could not open JSON file!")
 
     while True:
+        #Display the menu for the user to choose.
         display_menu()
-        choice = input("Enter your choice: ")
-
+        try:
+            choice = input("Enter your choice: ")
+        except:
+            print("Invalid entry! Please make sure to enter a number!")
         if choice == '1':
             calculate_global_statistics(data)
         elif choice == '2':
             print(f"Please choose one of the sub-menus of choice {choice}\n")
         elif choice == '2.1':
+            # make a random choice from the IDs we have in baseStations.
             station_id = random.choice([bs['id'] for bs in data['baseStations']])
             calculate_base_station_statistics(data, station_id)
         elif choice == '2.2':
-            station_id = int(input("Enter base station ID: "))
-            calculate_base_station_statistics(data, station_id)
+            try:
+                station_id = int(input("Enter base station ID: "))
+                calculate_base_station_statistics(data, station_id)
+            except:
+                print("Invalid entry! Please make sure to enter a number")
         elif choice == '3':
-            lat = float(input("Enter latitude: "))
-            lon = float(input("Enter longitude: "))
-            check_coverage(data, lat, lon)
+            try:
+                lat = float(input("Enter latitude: "))
+                lon = float(input("Enter longitude: "))
+                check_coverage(data, lat, lon)
+            except:
+                print("Invalid Entry! Please enter the correct coordinates")
+            
         elif choice == '4':
             break
         else:
